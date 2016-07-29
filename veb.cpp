@@ -20,7 +20,7 @@ VEB* createVEB(int exp);
 
 class RecursiveVEB : public VEB {
 	int numbits;
-	ll mn, mx;
+	ll mn = 1LL<<62, mx = -1;
 	VEB *aux = NULL;
 	unordered_map<u32, VEB*> children;
 	
@@ -34,7 +34,7 @@ class RecursiveVEB : public VEB {
 		auto it = children.find(base);
 		if (it == children.end()) it = children.insert({base, createVEB(numbits)}).first;
 		mn = min(mn, key);
-		mx = min(mx, key);
+		mx = max(mx, key);
 		return it->second->insert(key & ((1 << numbits) - 1));
 	}
 	bool remove(ll key) {
@@ -78,6 +78,7 @@ class RecursiveVEB : public VEB {
 			u32 prevBase = aux->prev(base);
 			return ((key ^ pos) | children[prevBase]->umax()) - ((base - prevBase) << numbits);
 		}
+		return (key ^ pos) | it->second->prev(pos);
 	}
 	inline bool isEmpty() { return mn > mx; }
 	inline ll umin() { return mn; }
@@ -126,14 +127,14 @@ class BitVEB : public VEB {
 };
 
 VEB* createVEB(int exp) {
-	if (exp > 16) return new RecursiveVEB(exp);
+	if (exp > 6) return new RecursiveVEB(exp);
 	return new BitVEB();
 }
 
 int main() {
-	BitVEB v;
-	v.insert(4);
-	v.insert(23);
-	v.insert(7);
-	cout << v.next(5) << ' ' << v.prev(5) << '\n';
+	VEB *v = createVEB(48);
+	v->insert(4);
+	v->insert(23);
+	v->insert(7);
+	cout << v->umin() << ' ' << v->umax() << ' ' << v->next(5) << ' ' << v->prev(5) << '\n';
 }
