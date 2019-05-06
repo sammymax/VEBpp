@@ -18,6 +18,8 @@ class VEB {
 
 VEB* createVEB(int exp);
 
+void ass(bool b) { if (!b) throw b; }
+
 class RecursiveVEB : public VEB {
 	int numbits;
 	ll mn = 1LL<<62, mx = -1;
@@ -35,7 +37,7 @@ class RecursiveVEB : public VEB {
 		if (it == children.end()) it = children.insert({base, createVEB(numbits)}).first;
 		mn = min(mn, key);
 		mx = max(mx, key);
-		return it->second->insert(key & ((1 << numbits) - 1));
+		return it->second->insert(key & ((1LL << numbits) - 1));
 	}
 	bool remove(ll key) {
 		if (isEmpty()) return false; // if not empty, aux must exist
@@ -61,9 +63,10 @@ class RecursiveVEB : public VEB {
 	ll next(ll key) {
 		if (key >= mx || isEmpty()) return -1;
 		if (key < mn) return mn;
-		u32 base = key >> numbits, pos = key & ((1 << numbits) - 1);
+		u32 base = key >> numbits, pos = key & ((1LL << numbits) - 1);
 		auto it = children.find(base);
-		if (it == children.end() || key >= it->second->umax()) {
+
+		if (it == children.end() || pos >= it->second->umax()) {
 			u32 nextBase = aux->next(base);
 			return ((key ^ pos) | children[nextBase]->umin()) + ((nextBase - base) << numbits);
 		}
@@ -72,9 +75,9 @@ class RecursiveVEB : public VEB {
 	ll prev(ll key) {
 		if (key <= mn || isEmpty()) return -1;
 		if (key > mx) return mx;
-		u32 base = key >> numbits, pos = key & ((1 << numbits) - 1);
+		u32 base = key >> numbits, pos = key & ((1LL << numbits) - 1);
 		auto it = children.find(base);
-		if (it == children.end() || key <= it->second->umin()) {
+		if (it == children.end() || pos <= it->second->umin()) {
 			u32 prevBase = aux->prev(base);
 			return ((key ^ pos) | children[prevBase]->umax()) - ((base - prevBase) << numbits);
 		}
@@ -92,14 +95,14 @@ class BitVEB : public VEB {
 	public:
 	bool insert(ll key) {
 		if ((data >> key) & 1) return false;
-		data |= 1<<key;
+		data |= 1LL<<key;
 		mn = min(mn, (int)key);
 		mx = max(mx, (int)key);
 		return true;
 	}
 	bool remove(ll key) {
 		if ((data >> key) ^ 1) return false;
-		data ^= (1 << key);
+		data ^= (1LL << key);
 		if (key == mn && key == mx)
 			mn = 64, mx = -1;
 		else {
@@ -112,13 +115,13 @@ class BitVEB : public VEB {
 		if (key >= mx || isEmpty()) return -1;
 		if (key < mn) return mn;
 		ll tmp = data >> ++key;
-		return key + __builtin_ctzll(tmp&-tmp);
+		return key + __builtin_ctzll(tmp);
 	}
 
 	ll prev(ll key) {
 		if (key <= mn || isEmpty()) return -1;
 		if (key > mx) return mx;
-		return 63 ^ __builtin_clzll(data & ((1<<key) - 1));
+		return 63 ^ __builtin_clzll(data & ((1LL<<key) - 1));
 	}
 
 	inline bool isEmpty() { return data == 0; }
@@ -131,10 +134,72 @@ VEB* createVEB(int exp) {
 	return new BitVEB();
 }
 
-int main() {
+vector<ll> genData(int num, ll mx) {
+	ull seed = chrono::system_clock::now().time_since_epoch().count();
+	mt19937 twister(seed);
+	uniform_int_distribution<ll> dist(0, mx-1);
+	vector<ll> v(num);
+	for (ll &x : v) x = dist(twister);
+	return v;
+}
+
+set<ll> genDataSet(int num, ll mx) {
+	vector<ll> v = genData(num, mx);
+	return set<ll> (v.begin(), v.end());
+}
+
+pair<int, int> prevNext(set<ll> &s, ll v) {
+	auto it = s.upper_bound(v);
+	ll prev = -1, next = -1;
+	if (it != s.end()) next = *it;
+	if (it != s.begin()) prev = *--it;
+	if (prev == v) {
+		if (it == s.begin()) prev = -1;
+		else prev = *--it;
+	}
+	return {prev, next};
+}
+
+void sparseSuperTest(int sz, ll usz, int testsPerInsert) {
+	VEB *v = createVEB(usz);
+	ass(v->isEmpty());
+
+	set<ll> s = genDataSet(sz, usz);
+	vector<ll> l(s.begin(), s.end()); // make list from the set
+	random_shuffle(l.begin(), l.end());
+	vector<ll> qData = genData(sz * testsPerInsert, usz);
+	int z = 0;
+
+	set<ll> inSoFar;
+	for (ll x : l) {
+		inSoFar.insert(x);
+		v->insert(x);
+		for (int i = 0; i < testsPerInsert; i++) {
+			pair<int, int> pn = prevNext(inSoFar, qData[z]);
+			ass(pn.first == v->prev(qData[z]));
+			ass(pn.second == v->next(qData[z]));
+			z++;
+		}
+	}
+}
+
+void sparseTest(int sz, ll usz) {
 	VEB *v = createVEB(48);
-	v->insert(4);
-	v->insert(23);
-	v->insert(7);
-	cout << v->umin() << ' ' << v->umax() << ' ' << v->next(5) << ' ' << v->prev(5) << '\n';
+	set<ll> s = genDataSet(sz, usz);
+	vector<ll> ar(s.begin(), s.end());
+	for (ll x : ar) v->insert(x);
+	cout << v->next(-12) << ' ' << v->umin() << ' ' << ar[0] << '\n';
+	ass(v->next(-12) == ar[0]);
+	for (int i = 0; i < ar.size(); i++) {
+		ll nxt = v->next(ar[i]);
+		cout << ar[i] << ' ' << ar[i+1] << ' ' << nxt << '\n';
+		if (i != ar.size() - 1) ass(nxt == ar[i+1]);
+		else ass(nxt == -1);
+	}
+}
+
+int main() {
+	ll sz = 1LL<<48;
+	cout << sz << '\n';
+	sparseTest(90, sz);
 }
